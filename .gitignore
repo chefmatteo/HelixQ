@@ -1,0 +1,13 @@
+/target
+.env
+.env.local
+
+# frontend
+apps/web/node_modules
+apps/web/.next
+apps/web/out
+
+# OS / editor
+.DS_Store
+*.swp
+

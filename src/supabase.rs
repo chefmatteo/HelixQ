@@ -2,6 +2,61 @@ use crate::config::Config;
 use crate::youtube_inject::Video;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct VectorHit {
+    // retrieve the following fields from the supabase videos table
+    // id, title, description, channel_title, language, view_count, like_count, thumbnail_url, url, similarity
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub channel_title: Option<String>, // optional
+    pub language: String,
+    pub view_count: i64,
+    pub like_count: i64, // integer
+    pub thumbnail_url: Option<String>, // optional
+    pub url: String,
+    pub similarity: f64, // float
+}
+
+pub async fn match_videos(
+    // match the embedding to the videos table and return the top match_count videos
+    config: &Config,
+    embedding: &[f32],
+    match_count: i64,
+    filter_language: Option<&str>,
+) -> Result<Vec<VectorHit>, Box<dyn std::error::Error>> {
+    let url = format!(
+        "{}/rest/v1/rpc/match_videos",
+        config.supabase_url.trim_end_matches('/')
+    );
+
+    let body = serde_json::json!({
+        "query_embedding": embedding,
+        "match_count": match_count,
+        "filter_language": filter_language,
+    });
+
+    let response = reqwest::Client::new()
+        .post(&url)
+        .header("apikey", &config.supabase_service_role_key)
+        .header(
+            "Authorization",
+            format!("Bearer {}", config.supabase_service_role_key),
+        )
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let text = response.text().await?;
+    if !status.is_success() {
+        return Err(format!("match_videos failed ({status}): {text}").into());
+    }
+
+    Ok(serde_json::from_str(&text)?)
+
+}
 #[derive(Serialize)]
 struct VideoRow<'a> {
     id: &'a str,
@@ -117,3 +172,5 @@ pub async fn upsert_video(
     println!("  supabase response: {body}");
     Ok(())
 }
+
+

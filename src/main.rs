@@ -78,12 +78,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Search { q, limit } => {
-            let hits = search::search_bm25(&q, limit)?;
-            println!("\n{} hit(s) for {:?}", hits.len(), q);
+            let hits = search::search_hybrid(&config, &q, limit).await?;
+            println!("\n{} hybrid hit(s) for {:?}", hits.len(), q);
             for (i, hit) in hits.iter().enumerate() {
                 println!(
-                    "{}. [{:.3}] {} — {} ({})", // print the score, title, channel, and id of each hit
-                    i + 1, // 0-based index, so add 1 for display
+                    "{}. [{:.4}] {} — {} ({})",
+                    i + 1,
                     hit.score,
                     hit.title,
                     hit.channel_title,

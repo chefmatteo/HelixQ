@@ -3,10 +3,54 @@ use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::{Schema, Value};
 use tantivy::{Index, TantivyDocument};
+use std::collections::HashMap;
 
 const INDEX_DIR: &str = "data/index";
+const RRF_K: f32 = 60.0;
 
-#[derive(Debug, Serialize)]
+pub fn fuse_rrf(
+    bm25: &[SearchHit],
+    vector: &[crate::supabase::VectorHit],
+    limit: usize,
+) -> Vec<SearchHit> {
+    let mut scores: HashMap<String, f32> = HashMap::new();
+    let mut docs: HashMap<String, SearchHit> = HashMap::new();
+
+    for (rank, hit) in bm25.iter().enumerate() {
+        *scores.entry(hit.id.clone()).or_insert(0.0) += 1.0 / (RRF_K + rank as f32 + 1.0);
+        docs.entry(hit.id.clone()).or_insert_with(|| hit.clone());
+    }
+
+    for (rank, hit) in vector.iter().enumerate() {
+        *scores.entry(hit.id.clone()).or_insert(0.0) += 1.0 / (RRF_K + rank as f32 + 1.0);
+        docs.entry(hit.id.clone()).or_insert_with(|| SearchHit {
+            id: hit.id.clone(),
+            title: hit.title.clone(),
+            channel_title: hit.channel_title.clone().unwrap_or_default(),
+            language: hit.language.clone(),
+            url: hit.url.clone(),
+            thumbnail_url: hit.thumbnail_url.clone().unwrap_or_default(),
+            view_count: hit.view_count,
+            like_count: hit.like_count,
+            score: hit.similarity as f32,
+        });
+    }
+
+    let mut merged: Vec<SearchHit> = docs
+        .into_iter()
+        .map(|(id, mut hit)| {
+            hit.score = *scores.get(&id).unwrap_or(&0.0);
+            hit
+        })
+        .collect();
+
+    merged.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    merged.truncate(limit);
+    merged
+}
+
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SearchHit {
     pub id: String,
     pub title: String,
@@ -54,6 +98,23 @@ pub fn search_bm25(query: &str, limit: usize) -> Result<Vec<SearchHit>, Box<dyn 
     }
 
     Ok(hits)
+}
+
+
+pub async fn search_hybrid(
+    config: &crate::config::Config,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, Box<dyn std::error::Error>> {
+    let bm25 = search_bm25(query, limit)?;
+    let emb = crate::embed::embed_text(
+        &config.openrouter_api_key,
+        &config.openrouter_embed_model,
+        query,
+    )
+    .await?;
+    let vector = crate::supabase::match_videos(config, &emb, limit as i64, None).await?;
+    Ok(fuse_rrf(&bm25, &vector, limit))
 }
 
 fn text_field(schema: &Schema, doc: &TantivyDocument, name: &str) -> String {

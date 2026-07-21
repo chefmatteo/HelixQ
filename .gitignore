@@ -11,3 +11,6 @@ apps/web/out
 .DS_Store
 *.swp
 
+# local Tantivy indexes
+/data/
+src/data/

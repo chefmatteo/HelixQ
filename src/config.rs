@@ -5,7 +5,10 @@ pub struct Config {
     pub supabase_url: String,
     pub supabase_service_role_key: String,
     pub youtube_api_key: String,
+    pub openrouter_api_key: String,
+    pub openrouter_embed_model: String,
 }
+
 
 // impl config is taking the values from the .env file and storing them in the struct 
 impl Config {
@@ -16,6 +19,8 @@ impl Config {
             supabase_url: required("SUPABASE_URL")?,
             supabase_service_role_key: required("SUPABASE_SERVICE_ROLE_KEY")?,
             youtube_api_key: required("YOUTUBE_API_KEY")?,
+            openrouter_api_key: required("OPENROUTER_API_KEY")?,
+            openrouter_embed_model: required("OPENROUTER_EMBED_MODEL")?,
         })
     }
 
@@ -28,6 +33,11 @@ impl Config {
             self.supabase_service_role_key.len()
         );
         println!("  YOUTUBE_API_KEY: ok ({} chars)", self.youtube_api_key.len());
+        println!(
+            "  OPENROUTER_API_KEY: ok ({} chars)",
+            self.openrouter_api_key.len()
+        );
+        println!("  OPENROUTER_EMBED_MODEL: {}", self.openrouter_embed_model);
     }
 }
 
